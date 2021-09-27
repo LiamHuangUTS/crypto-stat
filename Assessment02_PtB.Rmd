@@ -1,0 +1,113 @@
+---
+title: "Assessment02_pt_b"
+author: "Xilin Huang Liam"
+date: "20/09/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r yahoo, warning = FALSE}
+rm(list=ls())
+library(zoo)
+library(xts)
+library(TTR)
+library(quantmod)
+
+coin_portfolio=c("BTC-USD","ETH-USD","ADA-USD",
+                 "DOGE-USD","SHIB-USD")
+stockindex_portfolio=c("^DJI","^IXIC","^GSPC")
+stock_portfolio=c("TSLA","GOOG","AAPL","NVDA","AMD","TSM")
+
+data <- getSymbols(c(coin_portfolio,
+                     stockindex_portfolio,
+                     stock_portfolio),
+                   src='yahoo',
+                   #from=dyear,
+                   #to=d,
+                   autoassign=FALSE)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+```{r BitCoin, echo=FALSE}
+dataBTC = data.frame(date=index(`BTC-USD`), coredata(`BTC-USD`))
+dataBTC
+```
+```{r TSLA, echo=FALSE}
+dataTSLA = data.frame(date=index(TSLA), coredata(TSLA))
+dataTSLA
+```
+```{r BTCTSLA_fill, echo=FALSE}
+library(tidyr)
+# use Friday's data for weekends
+mdBTCTSLA <- merge(dataBTC,dataTSLA,by='date', all.x = TRUE)
+mdBTCTSLA_filled <- mdBTCTSLA %>%
+fill(TSLA.Open,TSLA.High,TSLA.Low,TSLA.Close,TSLA.Adjusted,TSLA.Volume)
+```
+
+```{r BTCTSLA_sub, echo=FALSE}
+# subset data (2019, close price and volume)
+mdBTCTSLA_sub <- subset(mdBTCTSLA_filled, date>='2019-01-01', select=c(date, TSLA.Close, TSLA.Volume, BTC.USD.Close, BTC.USD.Volume))
+row.names(mdBTCTSLA_sub) <- NULL
+mdBTCTSLA_sub
+```
+
+```{r lagdata, echo=FALSE, message=FALSE}
+library(dplyr)
+lag_list = c(1, 3, 5, 10, 20, 30, 100)
+for (i in lag_list){
+  if (i == lag_list[1]) {
+    df_lag = data.frame(col1 = lag(mdBTCTSLA_sub$TSLA.Close, n = i))
+    names(df_lag)[ncol(df_lag)] <- paste0("TSLA_price_lag_", i)
+  } else {
+    df_lag[,ncol(df_lag)+1] <- lag(mdBTCTSLA_sub$TSLA.Close, n = i)
+    names(df_lag)[ncol(df_lag)] <- paste0("TSLA_price_lag_", i)
+  }
+}
+df_lag
+```
+```{r lagdata merge, echo=FALSE}
+df_lag_m <- cbind(mdBTCTSLA_sub, df_lag)
+df_lag_m
+```
+```{r lagdata merge, echo=FALSE}
+c(NA, diff(df_lag_m$BTC.USD.Close)/df_lag_m$BTC.USD.Close * 100)
+```
+
+```{r lm model, echo=FALSE}
+library(ggplot2)
+library(ggfortify)
+# 100-day-lag linear regression
+x_value = df_lag_m$BTC.USD.Close
+y_value = df_lag_m$TSLA_price_lag_100
+fit=lm(data = df_lag_m, x_value~y_value)
+summary(fit)
+ggplot(df_lag_m, aes(x = x_value, y = y_value)) +
+  geom_point() +
+  stat_smooth(method = 'lm', col = 'red') + 
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     " Intercept = ",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+autoplot(fit)
+```
+```{r lm model log, echo=FALSE}
+# 5-day-lag linear regression (log)
+x_value = log(df_lag_m$BTC.USD.Close)
+y_value = df_lag_m$TSLA_price_lag_100
+fit=lm(data = df_lag_m, x_value~y_value)
+summary(fit)
+ggplot(df_lag_m, aes(x = x_value, y = y_value)) +
+  geom_point() +
+  stat_smooth(method = 'lm', col = 'red') + 
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     " Intercept = ",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+autoplot(fit)
+```
