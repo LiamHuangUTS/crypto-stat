@@ -32,7 +32,7 @@ data <- getSymbols(c(coin_portfolio,
                    #to=d,
                    autoassign=FALSE)
 ```
-
+test
 ```{r kaggle, message=FALSE, warning=FALSE}
 library(readr)
 library(kaggler)
